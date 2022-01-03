@@ -11,28 +11,21 @@ namespace Weather.Providers.Weather.OpenWeatherMap;
 
 public class WeatherProvider : IWeatherProvider
 {
-    private HttpClient _client;
-    private readonly string _apiKey;
+    private readonly OpenWeatherMapClient _client;
 
-    public WeatherProvider(HttpClient client, IOptions<WeatherSettings> settings)
+    public WeatherProvider(OpenWeatherMapClient client)
     {
         _client = client;
-        _client.BaseAddress = new Uri("https://api.openweathermap.org/data/2.5/");
-        _apiKey = settings.Value.ApiKey;
     }
     
     public async Task<CurrentWeather> GetCurrentWeatherAsync(
         CancellationToken cancellationToken = default)
     {
-        var response = await _client.GetAsync(
-            $"weather?appId={_apiKey}&zip=74133",
-            cancellationToken);
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var deserialized = await JsonSerializer.DeserializeAsync<WeatherResponse>(stream, 
-            cancellationToken: cancellationToken);
+        var deserialized = await _client.GetWeatherAsync(cancellationToken);
         var coord = deserialized.Coordinate;
-        var location = new Location(deserialized.Name,
-            new CoordinateModel(coord.Latitude, coord.Longitude));
+        var location = new Location(
+            City: deserialized.Name,
+            Coordinate: new CoordinateModel(coord.Latitude, coord.Longitude));
         var main = deserialized.Main;
         var weather = new WeatherModel(
             deserialized.Weather.First().Main, deserialized.Weather.First().Description);

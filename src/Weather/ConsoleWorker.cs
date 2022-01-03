@@ -1,7 +1,10 @@
+using CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Weather.Common.Interfaces;
+using Weather.Common.Models;
+using Weather.Common.Services;
 
 namespace Weather;
 
@@ -22,25 +25,54 @@ public class ConsoleWorker: IHostedService
     }
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        var args = Environment.GetCommandLineArgs();
         _logger.LogDebug(
             "Starting with arguments: {Arguments}", 
-            string.Join(" ", Environment.GetCommandLineArgs()));
+            string.Join(" ", args));
 
         _appLifetime.ApplicationStarted.Register(() =>
         {
+            // Maybe we turn these into functions? :)
             Task.Run(async () =>
             {
-                var provider = _serviceProvider.GetService<IWeatherProvider>()!;
-                var (location, _, temp) = await provider.GetCurrentWeatherAsync(cancellationToken);
+                var weatherProvider = _serviceProvider.GetService<IWeatherProvider>()!;
+                var locationProvider = _serviceProvider.GetService<LocationProvider>()!;
+                try
+                {
+                    await Parser.Default.ParseArguments<CommandLineOptions>(args)
+                        .WithParsedAsync(async options =>
+                        {
+                            locationProvider.SetLocation(new Location(
+                                Coordinate: options.Coordinate?.ToCoordinate(),
+                                City: options.City,
+                                Region: options.Region,
+                                Country: options.Country,
+                                Zip: options.Zip));
 
-                Console.WriteLine($"Weather Report: {location.Name}");
-                Console.WriteLine($"Coordinates: {location.Coordinate}");
-                Console.Write($"Temperature: {temp.Temperature.Fahrenheit:#.#}°F");
-                Console.WriteLine($" ({temp.Temperature.Celsius:#.#}°C)");
-                Console.Write($"Humidity: {temp.Humidity}%");
-                Console.WriteLine($" | Pressure: {temp.Pressure} hPa");
+                            // This is uuuuuuuuuuugly
+                            var ((city, _, _, _, coordinate)
+                                    , _,
+                                    (temperature, _, _, _, pressure, humidity)) =
+                                await weatherProvider.GetCurrentWeatherAsync(cancellationToken);
 
-                _appLifetime.StopApplication();
+                            Console.WriteLine($"Weather Report: {city}");
+                            Console.WriteLine($"Coordinates: {coordinate}");
+                            Console.Write($"Temperature: {temperature.Fahrenheit:#.#}°F");
+                            Console.WriteLine($" ({temperature.Celsius:#.#}°C)");
+                            Console.Write($"Humidity: {humidity}%");
+                            Console.WriteLine($" | Pressure: {pressure} hPa");
+                        });
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError("An error occurred while trying to fetch weather data: {Exception}", exception);
+                    Console.WriteLine($"An error occurred while trying to fetch weather data: {exception.Message}");
+                }
+                finally
+                {
+                    _appLifetime.StopApplication();    
+                }
+                
             }, cancellationToken);
         });
 
