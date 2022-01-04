@@ -1,3 +1,4 @@
+using System.Drawing;
 using CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -5,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Weather.Common.Interfaces;
 using Weather.Common.Models;
 using Weather.Common.Services;
+using Console = Colorful.Console;
 
 namespace Weather;
 
@@ -57,8 +59,11 @@ public class ConsoleWorker: IHostedService
 
                             Console.WriteLine($"Weather Report: {city}");
                             Console.WriteLine($"Coordinates: {coordinate}");
-                            Console.Write($"Temperature: {temperature.Fahrenheit:#.#}°F");
-                            Console.WriteLine($" ({temperature.Celsius:#.#}°C)");
+                            Console.Write($"Temperature: ");
+                            Console.Write($"{temperature.Fahrenheit:#.#}", GetRoughTempColor(temperature.Fahrenheit));
+                            Console.Write(" °F (");
+                            Console.Write($"{temperature.Celsius:#.#}", GetRoughTempColor(temperature.Fahrenheit));
+                            Console.WriteLine($" °C)");
                             Console.Write($"Humidity: {humidity}%");
                             Console.WriteLine($" | Pressure: {pressure} hPa");
                         });
@@ -78,6 +83,24 @@ public class ConsoleWorker: IHostedService
 
         
         return Task.CompletedTask;
+    }
+
+    // just for now until I build something better
+    private static Color GetRoughTempColor(double temperature)
+    {
+        // Red = hot
+        // Green = temperate
+        // Blue = cold
+        return temperature switch
+        {
+            <= 0 => Color.Blue,
+            > 0 and <= 32 => Color.Aqua,
+            > 32 and <= 50 => Color.Aquamarine,
+            > 50 and <= 80 => Color.Green,
+            > 80 and <= 95 => Color.Gold,
+            > 95 => Color.Red,
+            _ => throw new ArgumentOutOfRangeException(nameof(temperature), temperature, null)
+        };
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
